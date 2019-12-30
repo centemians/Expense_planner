@@ -19,21 +19,47 @@ const arcPath = d3.arc()
 
 const colour = d3.scaleOrdinal(d3['schemeSet3']);
 
+const legendGroup = svg.append('g')
+    .attr('transform', `translate(${dims.width + 40}, 10)`);
+
+const legend = d3.legendColor()
+    .shape('circle')
+    .shapePadding(10)
+    .scale(colour);
+
+
 //update function
 const update = (data) => {
     colour.domain(data.map(d => d.name));
     //console.log(data);
+    legendGroup.call(legend);
+      
+    legendGroup.selectAll('text').attr('fill','white');
+    
     const paths = graph.selectAll('path')
         .data(pie(data));
+
+    //Handle exit selection
+    paths.exit()
+        .transition().duration(750)
+        .attrTween("d", arcTweenExit)
+        .remove();
+
+    //handle the current DOM path updates
+    paths.attr('d',arcPath)
+        .transition().duration(750)
+            .attrTween('d', arcTweenUpdate);
     
     //console.log(paths.enter());
     paths.enter()
         .append('path')
         .attr('class','arc')
-        .attr('d',arcPath)
         .attr('stroke','#fff')
         .attr('stroke-width',3)
-        .attr('fill',d => colour(d.data.name));
+        .attr('fill',d => colour(d.data.name))
+        .each(function(d){ this._current = d })
+        .transition().duration(750)
+            .attrTween("d", arcTweenEnter);
 };
 
 //data array and firestore
@@ -60,3 +86,30 @@ db.collection('expenses').onSnapshot(res => {
     });
     update(data);
 });
+
+const arcTweenEnter = (d) => {
+    var i = d3.interpolate(d.endAngle, d.startAngle);
+
+    return function(t){
+        d.startAngle = i(t);
+        return arcPath(d);
+    }
+};
+
+const arcTweenExit = (d) => {
+    var i = d3.interpolate(d.startAngle, d.endAngle);
+
+    return function(t){
+        d.startAngle = i(t);
+        return arcPath(d);
+    }
+};
+
+function arcTweenUpdate(d){
+    var i = d3.interpolate(this._current, d);
+    this._current = d;
+
+    return function(t){
+        return arcPath(i(t));
+    }
+}
